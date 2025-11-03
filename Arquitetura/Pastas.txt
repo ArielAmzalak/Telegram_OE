@@ -1,0 +1,44 @@
+repo-root/
+├─ app/
+│  ├─ Dockerfile
+│  ├─ requirements.txt
+│  ├─ bot/
+│  │  ├─ main.py
+│  │  ├─ config.py
+│  │  ├─ rbac.py
+│  │  ├─ fsm.py
+│  │  ├─ handlers.py
+│  │  ├─ storage.py
+│  │  ├─ db.py
+│  │  ├─ tasks_client.py
+│  │  └─ utils.py
+│  ├─ shared/
+│  │  ├─ tasks.py
+│  │  ├─ reporting.py
+│  │  ├─ media.py
+│  │  ├─ stt_client.py
+│  │  └─ ocr.py
+│  └─ worker_entrypoint.sh
+├─ services/
+│  └─ stt/
+│     ├─ Dockerfile
+│     └─ app.py
+├─ db/
+│  ├─ init/01_schema.sql
+│  └─ retention.sql
+├─ templates/
+│  ├─ report.md.j2
+│  ├─ pptx_skeleton.json
+│  ├─ template.pptx         # DADO INDISPONÍVEL: inserir seu template
+│  └─ logo.png              # DADO INDISPONÍVEL
+├─ workflows/
+│  └─ n8n_workflow_esqueleto.json
+├─ deploy/
+│  ├─ docker-compose.yml
+│  └─ proxy/Caddyfile
+├─ env/
+│  └─ .env.example
+├─ config/
+│  └─ rbac.json.example
+├─ logs/
+└─ Makefile
