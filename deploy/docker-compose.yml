@@ -1,0 +1,138 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${PG_DB}
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${PG_USER} -d $${PG_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  n8n:
+    image: n8nio/n8n:latest
+    environment:
+      - N8N_HOST=${N8N_HOST}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL}
+      - GENERIC_TIMEZONE=${TZ}
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_DATABASE=${PG_DB}
+      - DB_POSTGRESDB_USER=${PG_USER}
+      - DB_POSTGRESDB_PASSWORD=${PG_PASSWORD}
+      - QUEUE_BULL_REDIS_HOST=redis
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8ndata:/home/node/.n8n
+
+  stt:
+    build:
+      context: ../services/stt
+      dockerfile: Dockerfile
+    environment:
+      VOSK_MODEL_PATH: /models/vosk-model  # DADO INDISPONÍVEL → baixar modelo
+    volumes:
+      - ../models/vosk:/models:ro
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  app-bot:
+    build:
+      context: ../app
+      dockerfile: Dockerfile
+    env_file:
+      - ../env/.env
+    depends_on:
+      - postgres
+      - redis
+      - minio
+      - stt
+    ports:
+      - "8080:8080"   # webhook opcional
+    volumes:
+      - ../templates:/app/templates:ro
+      - ../config:/app/config:ro
+      - ../logs:/var/log/app
+    command: ["python", "-m", "bot.main"]
+
+  app-worker:
+    build:
+      context: ../app
+      dockerfile: Dockerfile
+    env_file:
+      - ../env/.env
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    volumes:
+      - ../templates:/app/templates:ro
+      - ../config:/app/config:ro
+      - ../logs:/var/log/app
+    command: ["rq", "worker", "-u", "redis://redis:6379/0", "visitas"]
+
+  proxy:  # OPCIONAL (para webhook TLS público)
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app-bot
+
+volumes:
+  pgdata:
+  redisdata:
+  minio:
+  n8ndata:
+  caddy_data:
+  caddy_config:
