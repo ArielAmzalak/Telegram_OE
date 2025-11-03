@@ -1,0 +1,41 @@
+[Equipes em Campo]         (fotos, áudios, vídeos, texto, geo)
+        |
+        v  (Telegram)
++---------------------+
+|  Bot (aiogram)      |<--RBAC-- Admin/Supervisor/Técnico
+|  /start /briefing   |
+|  /anexo /audio ...  |
++---------+-----------+
+          | baixa arquivos (stream) + metadados
+          v
+   [MinIO - S3 local] <-----+
+          |                 |
+          |   (idempotência por hash; JSON sidecar)
+          v                 |
+   [PostgreSQL - DDL]       |
+          |                 |
+          +--> cria tarefas (status=pending, tries=0)
+                            |
+                            v
+                     [Redis + RQ]
+                            |
+                            v
+                  +---------+-----------+
+                  |  Worker (Python)   |
+                  |  STT/OCR/ffmpeg    |
+                  |  Gera MD->HTML->PDF|
+                  |  Gera DOCX/PPTX    |
+                  +----+-----------+---+
+                       |           |
+                       v           v
+                   [MinIO]     [PostgreSQL]
+                       |           |
+                       +-----+-----+
+                             |
+                             v
+                     [n8n on-prem]
+                   / Webhook & Jobs \
+                             |
+                             v
+                  Entrega: Telegram (bot)
+                  + links assinados MinIO
